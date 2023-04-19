@@ -18,8 +18,8 @@ var Counter metricType = "counter"
 var Histogram metricType = "histogram"
 var Summary metricType = "summary"
 
-// 指标定义
-type metric struct {
+// 指标样本定义
+type Sample struct {
 	Help           string
 	Type           metricType
 	MetricName     string
@@ -29,8 +29,8 @@ type metric struct {
 }
 
 // 创建指标实力
-func NewMetric(help, mName string, mType metricType, labels map[string]string, value float64, valuePrecision uint8) *metric {
-	m := &metric{
+func NewSample(help, mName string, mType metricType, labels map[string]string, value float64, valuePrecision uint8) *Sample {
+	m := &Sample{
 		Help:           help,
 		Type:           mType,
 		MetricName:     mName,
@@ -43,7 +43,7 @@ func NewMetric(help, mName string, mType metricType, labels map[string]string, v
 }
 
 // 扩展标签, 晖略不符合规范的标签
-func (m *metric) extendLabel(labels ...map[string]string) {
+func (m *Sample) extendLabel(labels ...map[string]string) {
 	if m.Labels == nil {
 		m.Labels = make(map[string]string)
 	}
@@ -158,11 +158,10 @@ func parseTag(tagRaw string) *promTag {
 }
 
 // 解析 metricer 为 metric
-func ParseMetricer(metricer Metricer, externalLabel map[string]string) ([]*metric, error) {
-	var metrics = make([]*metric, 0, 32)
+func ParseMetricer(metricer Metricer, externalLabel map[string]string) ([]*Sample, error) {
+	var samples = make([]*Sample, 0, 32)
 	label := make(map[string]string, 8)
 
-	var m *metric
 	reflectType := reflect.TypeOf(metricer)
 	reflectValue := reflect.ValueOf(metricer)
 
@@ -190,16 +189,16 @@ func ParseMetricer(metricer Metricer, externalLabel map[string]string) ([]*metri
 		if promTag.IsMetric {
 			// float64 指标值
 			if fv, err := strconv.ParseFloat(fmt.Sprint(fieldValue), 64); err == nil {
-				m = NewMetric(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, fv, promTag.ValuePrecision)
-				metrics = append(metrics, m)
-				// bool 指标值
+				s := NewSample(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, fv, promTag.ValuePrecision)
+				samples = append(samples, s)
+				// bool 指标
 			} else if fv, err := strconv.ParseBool(fmt.Sprint(fieldValue)); err == nil {
 				var fvf float64 = 0
 				if fv {
 					fvf = 1
 				}
-				m = NewMetric(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, fvf, promTag.ValuePrecision)
-				metrics = append(metrics, m)
+				s := NewSample(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, fvf, promTag.ValuePrecision)
+				samples = append(samples, s)
 			} else {
 				msg := fmt.Sprintf("不可用的指标字段(%s)的值(%s) 必须是一个可float/bool的字段", fieldName, fmt.Sprint(fieldValue))
 				return nil, PromError{msg}
@@ -208,8 +207,8 @@ func ParseMetricer(metricer Metricer, externalLabel map[string]string) ([]*metri
 
 	}
 	// 添加 metric 标签
-	for _, metric := range metrics {
-		metric.extendLabel(label, externalLabel)
+	for _, sample := range samples {
+		sample.extendLabel(label, externalLabel)
 	}
-	return metrics, nil
+	return samples, nil
 }
