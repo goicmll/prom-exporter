@@ -1,4 +1,4 @@
-package prom
+package prometheus
 
 type PromError struct {
 	Msg string
