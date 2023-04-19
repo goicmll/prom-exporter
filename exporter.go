@@ -56,16 +56,16 @@ func (e *Exporter) String() string {
 	return builder.String()
 }
 
-// 添加 metric
-func (e *Exporter) AddMetric(ms ...*Sample) {
-	for _, m := range ms {
-		if _, ok := e.MetricSamples[m.MetricName]; ok {
+// 添加指标样本
+func (e *Exporter) AddSamples(ss ...*Sample) {
+	for _, s := range ss {
+		if _, ok := e.MetricSamples[s.MetricName]; ok {
 			// 已存在,追加
-			e.MetricSamples[m.MetricName] = append(e.MetricSamples[m.MetricName], m)
+			e.MetricSamples[s.MetricName] = append(e.MetricSamples[s.MetricName], s)
 		} else {
 			// 不存在,先初始化,再追加
-			e.MetricSamples[m.MetricName] = make([]*Sample, 0, e.sampleCount)
-			e.MetricSamples[m.MetricName] = append(e.MetricSamples[m.MetricName], m)
+			e.MetricSamples[s.MetricName] = make([]*Sample, 0, e.sampleCount)
+			e.MetricSamples[s.MetricName] = append(e.MetricSamples[s.MetricName], s)
 		}
 	}
 }
@@ -74,7 +74,7 @@ func (e *Exporter) AddMetric(ms ...*Sample) {
 func (e *Exporter) Merge(es ...*Exporter) {
 	for _, e := range es {
 		for _, ms := range e.MetricSamples {
-			e.AddMetric(ms...)
+			e.AddSamples(ms...)
 		}
 	}
 }
