@@ -44,12 +44,12 @@ func (e *Exporter) String() string {
 		builder.WriteString(samples[0].Type)
 		builder.WriteString("\n")
 
-		for _, metric := range samples {
+		for _, sample := range samples {
 			// 写入指标
-			builder.WriteString(metric.MetricName)
-			builder.WriteString(mapToStr(metric.Labels))
+			builder.WriteString(sample.MetricName)
+			builder.WriteString(mapToStr(sample.Labels))
 			builder.WriteString(" ")
-			builder.WriteString(strconv.FormatFloat(metric.Value, 'f', int(metric.ValuePrecision), 64))
+			builder.WriteString(strconv.FormatFloat(sample.Value, 'f', int(sample.ValuePrecision), 64))
 			builder.WriteString("\n")
 		}
 	}
