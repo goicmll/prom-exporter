@@ -31,14 +31,15 @@ func (e *Exporter) String() string {
 			continue
 		}
 		// 写入help
-		builder.WriteString("# HELP")
+		builder.WriteString("\n")
+		builder.WriteString("# HELP ")
 		builder.WriteString(samples[0].MetricName)
 		builder.WriteString(" ")
 		builder.WriteString(samples[0].Help)
 		builder.WriteString("\n")
 
 		// 写入 type
-		builder.WriteString("# TYPEs")
+		builder.WriteString("# TYPE ")
 		builder.WriteString(samples[0].MetricName)
 		builder.WriteString(" ")
 		builder.WriteString(samples[0].Type)
