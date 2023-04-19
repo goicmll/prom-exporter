@@ -29,7 +29,7 @@ type Sample struct {
 }
 
 // 创建指标实力
-func NewSample(help, mName string, mType metricType, labels map[string]string, value float64, valuePrecision uint8) *Sample {
+func NewSample(help string, mType metricType, mName string, labels map[string]string, value float64, valuePrecision uint8) *Sample {
 	m := &Sample{
 		Help:           help,
 		Type:           mType,
