@@ -1,3 +1,3 @@
-module github.com/goicmll/prometheus
+module github.com/goicmll/prom
 
 go 1.18
