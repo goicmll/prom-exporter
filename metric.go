@@ -158,7 +158,7 @@ func parseTag(tagRaw string) *promTag {
 }
 
 // 解析 metricer 为 metric
-func ParseMetricer(metricer Metricer, externalLabel map[string]string) ([]*Sample, error) {
+func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*Sample, error) {
 	var samples = make([]*Sample, 0, 32)
 	label := make(map[string]string, 8)
 
@@ -207,8 +207,9 @@ func ParseMetricer(metricer Metricer, externalLabel map[string]string) ([]*Sampl
 
 	}
 	// 添加 metric 标签
+	labels := append(externalLabels, label)
 	for _, sample := range samples {
-		sample.extendLabel(label, externalLabel)
+		sample.extendLabel(labels...)
 	}
 	return samples, nil
 }
