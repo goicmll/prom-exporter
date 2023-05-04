@@ -10,6 +10,10 @@ import (
 
 var promTagCache = make(map[string]*promTag, 1024)
 
+type Relabeling struct {
+	Action string
+}
+
 // 指标数据类型
 type metricType = string
 
@@ -23,37 +27,47 @@ type Sample struct {
 	Help           string
 	Type           metricType
 	MetricName     string
-	Labels         map[string]string
+	Label          map[string]string
+	ExcludeLabel   map[string]bool
 	Value          float64
 	ValuePrecision uint8
 }
 
-// 创建指标实力
-func NewSample(help string, mType metricType, mName string, labels map[string]string, value float64, valuePrecision uint8) *Sample {
+// 创建样本实例
+func NewSample(help, mType metricType, mName string, label map[string]string, excludeLabel map[string]bool, value float64, valuePrecision uint8) *Sample {
 	m := &Sample{
 		Help:           help,
 		Type:           mType,
 		MetricName:     mName,
-		Labels:         nil,
+		Label:          label,
+		ExcludeLabel:   excludeLabel,
 		Value:          value,
 		ValuePrecision: valuePrecision,
 	}
-	m.extendLabel(labels)
+	m.setLabel()
 	return m
 }
 
-// 扩展标签, 晖略不符合规范的标签
-func (m *Sample) extendLabel(labels ...map[string]string) {
-	if m.Labels == nil {
-		m.Labels = make(map[string]string)
+// 扩展标签, 忽略不符合规范的标签
+func (m *Sample) setLabel(labels ...map[string]string) {
+	// 初始化标签字段
+	if m.Label == nil {
+		m.Label = make(map[string]string, 4)
 	}
+	// 添加标签
 	for _, label := range labels {
 		if label == nil {
 			continue
 		} else {
 			for k, v := range label {
-				m.Labels[k] = v
+				m.Label[k] = v
 			}
+		}
+	}
+	// 删除排除的标签
+	for k, v := range m.ExcludeLabel {
+		if v {
+			delete(m.Label, k)
 		}
 	}
 }
@@ -187,9 +201,13 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 
 		// 设置解析额 指标
 		if promTag.IsMetric {
+			var excludeLabel = make(map[string]bool, 1)
+			if promTag.IsLabel {
+				excludeLabel[promTag.LabelName] = true
+			}
 			// float64 指标值
 			if fv, err := strconv.ParseFloat(fmt.Sprint(fieldValue), 64); err == nil {
-				s := NewSample(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, fv, promTag.ValuePrecision)
+				s := NewSample(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, excludeLabel, fv, promTag.ValuePrecision)
 				samples = append(samples, s)
 				// bool 指标
 			} else if fv, err := strconv.ParseBool(fmt.Sprint(fieldValue)); err == nil {
@@ -197,7 +215,7 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 				if fv {
 					fvf = 1
 				}
-				s := NewSample(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, fvf, promTag.ValuePrecision)
+				s := NewSample(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, excludeLabel, fvf, promTag.ValuePrecision)
 				samples = append(samples, s)
 			} else {
 				msg := fmt.Sprintf("不可用的指标字段(%s)的值(%s) 必须是一个可float/bool的字段", fieldName, fmt.Sprint(fieldValue))
@@ -209,7 +227,7 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 	// 添加 metric 标签
 	labels := append(externalLabels, label)
 	for _, sample := range samples {
-		sample.extendLabel(labels...)
+		sample.setLabel(labels...)
 	}
 	return samples, nil
 }
