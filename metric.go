@@ -220,7 +220,7 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 			}
 			// 同时是指标和标签， 添加到待删除标签中
 			if promTag.IsLabel {
-				excludeLabel[promTag.MetricName] = promTag.LabelName
+				excludeLabel[metricName] = promTag.LabelName
 			}
 		}
 	}
@@ -228,10 +228,8 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 	labels := append(externalLabels, label)
 	for _, sample := range samples {
 		sample.addLabel(labels...)
-		fmt.Println(sample)
 		// 删除排除的标签
 		sample.deleteLabel([]string{excludeLabel[sample.MetricName]})
-		fmt.Println(sample)
 
 	}
 	return samples, nil
