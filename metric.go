@@ -38,12 +38,12 @@ func NewSample(help string, mType metricType, mName string, labels map[string]st
 		Value:          value,
 		ValuePrecision: valuePrecision,
 	}
-	m.addLabel(labels)
+	m.extendLabel(labels)
 	return m
 }
 
-// 添加标签
-func (m *Sample) addLabel(labels ...map[string]string) {
+// 扩展标签, 晖略不符合规范的标签
+func (m *Sample) extendLabel(labels ...map[string]string) {
 	if m.Labels == nil {
 		m.Labels = make(map[string]string)
 	}
@@ -55,19 +55,6 @@ func (m *Sample) addLabel(labels ...map[string]string) {
 				m.Labels[k] = v
 			}
 		}
-	}
-}
-
-// 添加标签
-func (m *Sample) deleteLabel(labelNames []string) {
-	if m.Labels == nil {
-		return
-	}
-	if len(labelNames) == 0 {
-		return
-	}
-	for _, ln := range labelNames {
-		delete(m.Labels, ln)
 	}
 }
 
@@ -103,7 +90,6 @@ type promTag struct {
 	Type           metricType
 	MetricName     string
 	LabelName      string
-	Both           bool
 	ValuePrecision uint8
 }
 
@@ -127,7 +113,6 @@ func parseTag(tagRaw string) *promTag {
 		IsLabel:    false,
 		MetricName: "",
 		LabelName:  "",
-		Both:       false,
 	}
 
 	promTags := strings.Split(strings.TrimSpace(tagRaw), ";")
@@ -167,10 +152,6 @@ func parseTag(tagRaw string) *promTag {
 	if pt.Help == "" {
 		pt.IsMetric = false
 	}
-	// 同时是标签和指标的字段
-	if pt.IsLabel && pt.IsMetric {
-		pt.Both = true
-	}
 	// tag 的解析缓存, prom 标签后的字符串为key
 	promTagCache[tagRaw] = &pt
 	return &pt
@@ -180,8 +161,6 @@ func parseTag(tagRaw string) *promTag {
 func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*Sample, error) {
 	var samples = make([]*Sample, 0, 32)
 	label := make(map[string]string, 8)
-	// 指标待删除的标签
-	deleteLabel := make(map[string]string, 8)
 
 	reflectType := reflect.TypeOf(metricer)
 	reflectValue := reflect.ValueOf(metricer)
@@ -225,17 +204,12 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 				return nil, PromError{msg}
 			}
 		}
-		// 如果同时是标签和指标,去除该指标的该标签
-		if promTag.Both {
-			deleteLabel[promTag.MetricName] = promTag.LabelName
-		}
+
 	}
 	// 添加 metric 标签
 	labels := append(externalLabels, label)
 	for _, sample := range samples {
-		sample.addLabel(labels...)
-		// 删除标签
-		sample.deleteLabel([]string{deleteLabel[sample.MetricName]})
+		sample.extendLabel(labels...)
 	}
 	return samples, nil
 }
