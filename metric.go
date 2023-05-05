@@ -103,7 +103,6 @@ type promTag struct {
 	Type           metricType
 	MetricName     string
 	LabelName      string
-	Both           bool
 	ValuePrecision uint8
 }
 
@@ -125,7 +124,6 @@ func parseTag(tagRaw string) *promTag {
 		Type:       Gauge,
 		IsMetric:   false,
 		IsLabel:    false,
-		Both:       false,
 		MetricName: "",
 		LabelName:  "",
 	}
@@ -167,10 +165,6 @@ func parseTag(tagRaw string) *promTag {
 	if pt.Help == "" {
 		pt.IsMetric = false
 	}
-	// 同时是标签和指标
-	if pt.IsMetric && pt.IsLabel {
-		pt.Both = true
-	}
 	// tag 的解析缓存, prom 标签后的字符串为key
 	promTagCache[tagRaw] = &pt
 	return &pt
@@ -207,9 +201,10 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 
 		// 设置解析额 指标
 		if promTag.IsMetric {
+			metricName := strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, "")
 			// float64 指标值
 			if fv, err := strconv.ParseFloat(fmt.Sprint(fieldValue), 64); err == nil {
-				s := NewSample(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, fv, promTag.ValuePrecision)
+				s := NewSample(promTag.Help, promTag.Type, metricName, nil, fv, promTag.ValuePrecision)
 				samples = append(samples, s)
 				// bool 指标
 			} else if fv, err := strconv.ParseBool(fmt.Sprint(fieldValue)); err == nil {
@@ -217,17 +212,16 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 				if fv {
 					fvf = 1
 				}
-				s := NewSample(promTag.Help, promTag.Type, strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, ""), nil, fvf, promTag.ValuePrecision)
+				s := NewSample(promTag.Help, promTag.Type, metricName, nil, fvf, promTag.ValuePrecision)
 				samples = append(samples, s)
 			} else {
 				msg := fmt.Sprintf("不可用的指标字段(%s)的值(%s) 必须是一个可float/bool的字段", fieldName, fmt.Sprint(fieldValue))
 				return nil, PromError{msg}
 			}
-		}
-		// 同时是指标和标签， 添加到待删除标签中
-		if promTag.Both {
-			excludeLabel[promTag.MetricName] = promTag.LabelName
-			fmt.Println(excludeLabel)
+			// 同时是指标和标签， 添加到待删除标签中
+			if promTag.IsLabel {
+				excludeLabel[promTag.MetricName] = promTag.LabelName
+			}
 		}
 	}
 	// 添加 metric 标签
