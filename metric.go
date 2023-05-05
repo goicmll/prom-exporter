@@ -227,14 +227,18 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 		// 同时是指标和标签， 添加到待删除标签中
 		if promTag.Both {
 			excludeLabel[promTag.MetricName] = promTag.LabelName
+			fmt.Println(excludeLabel)
 		}
 	}
 	// 添加 metric 标签
 	labels := append(externalLabels, label)
 	for _, sample := range samples {
 		sample.addLabel(labels...)
+		fmt.Println(sample)
 		// 删除排除的标签
 		sample.deleteLabel([]string{excludeLabel[sample.MetricName]})
+		fmt.Println(sample)
+
 	}
 	return samples, nil
 }
