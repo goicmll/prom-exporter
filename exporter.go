@@ -73,8 +73,8 @@ func (e *Exporter) AddSamples(ss ...*Sample) {
 
 // 合并 exporter
 func (e *Exporter) Merge(es ...*Exporter) {
-	for _, e := range es {
-		for _, ms := range e.MetricSamples {
+	for _, ee := range es {
+		for _, ms := range ee.MetricSamples {
 			e.AddSamples(ms...)
 		}
 	}
