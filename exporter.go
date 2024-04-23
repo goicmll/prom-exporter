@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// 指标导出
+// Exporter 指标导出
 type Exporter struct {
 	// metricCount 预估的指标个数， 即预估的本次获取的所有样本的指标名去重的个数
 	metricCount uint64
@@ -14,7 +14,7 @@ type Exporter struct {
 	MetricSamples map[string][]*Sample
 }
 
-// metricCount 预估的指标个数， 即预估的本次获取的所有样本的指标名去重的个数
+// NewExporter metricCount 预估的指标个数， 即预估的本次获取的所有样本的指标名去重的个数
 // totalSampleCount 预估所有的样本个数
 func NewExporter(metricCount, totalSampleCount uint64) *Exporter {
 	preMetric := totalSampleCount / metricCount
@@ -57,7 +57,7 @@ func (e *Exporter) String() string {
 	return builder.String()
 }
 
-// 添加指标样本
+// AddSamples 添加指标样本
 func (e *Exporter) AddSamples(ss ...*Sample) {
 	for _, s := range ss {
 		if _, ok := e.MetricSamples[s.MetricName]; ok {
@@ -71,7 +71,7 @@ func (e *Exporter) AddSamples(ss ...*Sample) {
 	}
 }
 
-// 合并 exporter
+// Merge 合并 exporter
 func (e *Exporter) Merge(es ...*Exporter) {
 	for _, ee := range es {
 		for _, ms := range ee.MetricSamples {

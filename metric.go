@@ -18,7 +18,7 @@ var Counter metricType = "counter"
 var Histogram metricType = "histogram"
 var Summary metricType = "summary"
 
-// 指标样本定义
+// Sample 指标样本定义
 type Sample struct {
 	Help           string
 	Type           metricType
@@ -28,7 +28,7 @@ type Sample struct {
 	ValuePrecision uint8
 }
 
-// 创建指标实力
+// NewSample 创建指标实力
 func NewSample(help string, mType metricType, mName string, labels map[string]string, value float64, valuePrecision uint8) *Sample {
 	m := &Sample{
 		Help:           help,
@@ -71,7 +71,7 @@ func (m *Sample) deleteLabel(labelNames []string) {
 	}
 }
 
-// 定义指标接口, 实现此接口的 struct 可以通过 tag 标记,自动解析成m etric
+// Metricer 定义指标接口, 实现此接口的 struct 可以通过 tag 标记,自动解析成m etric
 type Metricer interface {
 	GetMetricNamePrefix() string
 }
@@ -170,9 +170,14 @@ func parseTag(tagRaw string) *promTag {
 	return &pt
 }
 
-// 解析 metricer 为 metric
+// ParseMetricer 解析 metricer 为 metric
 func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*Sample, error) {
+
+	if metricer == nil {
+		return make([]*Sample, 0), nil
+	}
 	var samples = make([]*Sample, 0, 32)
+
 	label := make(map[string]string, 8)
 	excludeLabel := make(map[string]string, 8)
 
@@ -180,7 +185,7 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 	reflectValue := reflect.ValueOf(metricer)
 
 	// metricer 必须是一个 struct
-	if metricer != nil && reflectValue.Kind() != reflect.Struct {
+	if reflectValue.Kind() != reflect.Struct {
 		return nil, PromError{"metricer 必须是一个 struct!"}
 	}
 
