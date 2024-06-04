@@ -1,3 +1,3 @@
 module github.com/goicmll/prometheus
 
-go 1.20
+go 1.22

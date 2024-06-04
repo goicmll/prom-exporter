@@ -10,70 +10,14 @@ import (
 
 var promTagCache = make(map[string]*promTag, 1024)
 
-// 指标数据类型
-type metricType = string
-
-var Gauge metricType = "gauge"
-var Counter metricType = "counter"
-var Histogram metricType = "histogram"
-var Summary metricType = "summary"
-
-// Sample 指标样本定义
-type Sample struct {
-	Help           string
-	Type           metricType
-	MetricName     string
-	Labels         map[string]string
-	Value          float64
-	ValuePrecision uint8
-}
-
-// NewSample 创建指标实力
-func NewSample(help string, mType metricType, mName string, labels map[string]string, value float64, valuePrecision uint8) *Sample {
-	m := &Sample{
-		Help:           help,
-		Type:           mType,
-		MetricName:     mName,
-		Labels:         nil,
-		Value:          value,
-		ValuePrecision: valuePrecision,
-	}
-	m.addLabel(labels)
-	return m
-}
-
-// 添加标签， 排除符合规范的标签
-func (m *Sample) addLabel(labels ...map[string]string) {
-	if m.Labels == nil {
-		m.Labels = make(map[string]string)
-	}
-	for _, label := range labels {
-		if label == nil {
-			continue
-		} else {
-			for k, v := range label {
-				m.Labels[k] = v
-			}
-		}
-	}
-}
-
-// 删除标签
-func (m *Sample) deleteLabel(labelNames []string) {
-	if m.Labels == nil {
-		m.Labels = make(map[string]string)
-	}
-	if len(labelNames) == 0 {
-		return
-	}
-	for _, ln := range labelNames {
-		delete(m.Labels, ln)
-	}
-}
-
-// Metricer 定义指标接口, 实现此接口的 struct 可以通过 tag 标记,自动解析成m etric
+// Metricer 定义指标接口, 实现此接口的 struct 可以通过 tag 标记,自动解析成metric
 type Metricer interface {
+	// GetMetricNamePrefix 指标名前缀
 	GetMetricNamePrefix() string
+	// GetMetricNameSuffix 指标名后缀缀
+	GetMetricNameSuffix() string
+	// GetMetricNameSeparator 指标名前后缀连接符
+	GetMetricNameSeparator() string
 }
 
 // 指标名和标签的匹配的正则表达式
@@ -103,7 +47,7 @@ type promTag struct {
 	Type           metricType
 	MetricName     string
 	LabelName      string
-	ValuePrecision uint8
+	ValuePrecision int
 }
 
 var mTypeMapping = map[string]metricType{
@@ -156,8 +100,10 @@ func parseTag(tagRaw string) *promTag {
 				pt.IsLabel = true
 			}
 		case "valuePrecision":
-			if value, err := strconv.ParseUint(strings.TrimSpace(kv[1]), 10, 8); err != nil {
-				pt.ValuePrecision = uint8(value)
+			if value, err := strconv.ParseInt(strings.TrimSpace(kv[1]), 10, 8); err != nil {
+				pt.ValuePrecision = int(value)
+			} else {
+				pt.ValuePrecision = 2
 			}
 		}
 	}
@@ -170,8 +116,8 @@ func parseTag(tagRaw string) *promTag {
 	return &pt
 }
 
-// ParseMetricer 解析 metricer 为 metric
-func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*Sample, error) {
+// Parse 解析 metricer 为 metric
+func Parse(metricer Metricer, externalLabels ...map[string]string) ([]*Sample, error) {
 
 	if metricer == nil {
 		return make([]*Sample, 0), nil
@@ -193,39 +139,47 @@ func ParseMetricer(metricer Metricer, externalLabels ...map[string]string) ([]*S
 	for i := 0; i < reflectType.NumField(); i++ {
 		fieldName := reflectType.Field(i).Name
 		fieldValue := reflectValue.FieldByName(fieldName)
-		promTag := parseTag(reflectType.Field(i).Tag.Get("prom"))
+		pt := parseTag(reflectType.Field(i).Tag.Get("prom"))
 
 		// 忽略
-		if !(promTag.IsLabel || promTag.IsMetric) {
+		if !(pt.IsLabel || pt.IsMetric) {
 			continue
 		}
 		// 设置解析的标签
-		if promTag.IsLabel {
-			label[promTag.LabelName] = tidyLabelValue(fmt.Sprint(fieldValue))
+		if pt.IsLabel {
+			label[pt.LabelName] = tidyLabelValue(fmt.Sprint(fieldValue))
 		}
+		// 指标字段解析成样本对象
+		if pt.IsMetric {
+			// 添加指标名前后缀
+			metricName := strings.Join(
+				[]string{
+					metricer.GetMetricNamePrefix(),
+					pt.MetricName,
+					metricer.GetMetricNameSuffix(),
+				},
+				metricer.GetMetricNameSeparator(),
+			)
 
-		// 设置解析额 指标
-		if promTag.IsMetric {
-			metricName := strings.Join([]string{metricer.GetMetricNamePrefix(), promTag.MetricName}, "")
-			// float64 指标值
+			// 设置指标值
+			// 可解析成float64的值的样本
 			if fv, err := strconv.ParseFloat(fmt.Sprint(fieldValue), 64); err == nil {
-				s := NewSample(promTag.Help, promTag.Type, metricName, nil, fv, promTag.ValuePrecision)
+				s := NewSample(pt.Help, pt.Type, metricName, nil, fv, pt.ValuePrecision)
 				samples = append(samples, s)
-				// bool 指标
-			} else if fv, err := strconv.ParseBool(fmt.Sprint(fieldValue)); err == nil {
-				var fvf float64 = 0
-				if fv {
-					fvf = 1
+				// 可解析成bool的值的样本
+			} else if bv, err := strconv.ParseBool(fmt.Sprint(fieldValue)); err == nil {
+				s := NewSample(pt.Help, pt.Type, metricName, nil, 0, pt.ValuePrecision)
+				if bv {
+					s.Value = 1
 				}
-				s := NewSample(promTag.Help, promTag.Type, metricName, nil, fvf, promTag.ValuePrecision)
 				samples = append(samples, s)
 			} else {
 				msg := fmt.Sprintf("不可用的指标字段(%s)的值(%s) 必须是一个可float/bool的字段", fieldName, fmt.Sprint(fieldValue))
 				return nil, PromError{msg}
 			}
 			// 同时是指标和标签， 添加到待删除标签中
-			if promTag.IsLabel {
-				excludeLabel[metricName] = promTag.LabelName
+			if pt.IsLabel {
+				excludeLabel[metricName] = pt.LabelName
 			}
 		}
 	}
