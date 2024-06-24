@@ -34,7 +34,7 @@ func validateName(name string) bool {
 // 验证标签值
 func tidyLabelValue(value string) string {
 	if regexLabelValueIgnore.MatchString(value) {
-		return "ingnore"
+		return "illegal"
 	} else {
 		return value
 	}
