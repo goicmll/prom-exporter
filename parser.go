@@ -10,21 +10,17 @@ import (
 
 var promTagCache = make(map[string]*promTag, 1024)
 
-// Metricer 定义指标接口, 实现此接口的 struct 可以通过 tag 标记,自动解析成metric
-type Metricer interface {
-	// GetMetricNamePrefix 指标名前缀
-	GetMetricNamePrefix() string
-	// GetMetricNameSuffix 指标名后缀缀
-	GetMetricNameSuffix() string
-	// GetMetricNameSeparator 指标名前后缀连接符
-	GetMetricNameSeparator() string
-}
+//// Metricer 定义指标接口, 实现此接口的 struct 可以通过 tag 标记,自动解析成metric
+//type Metricer interface {
+//	// GetMetricNamePrefix 指标名前缀
+//	GetMetricNamePrefix() string
+//}
 
 // 指标名和标签的匹配的正则表达式
 var regexName = regexp.MustCompile(`^[A-Za-z0-9_-]{2,}$`)
 
 // 标签值匹配的正则表达式
-var regexLabelValueIgnore = regexp.MustCompile(`[{}"\\]+`)
+var regexLabelValueIgnore = regexp.MustCompile(`[{}"'\\]+`)
 
 // 验证指标名和标签名是否符合规范
 func validateName(name string) bool {
@@ -58,7 +54,7 @@ var mTypeMapping = map[string]metricType{
 }
 
 // 解析 struct 的 tag 为 promTag
-// prom: “help: some help;type: counter;metricName: request_total;labelName: host”
+// prom: "help: some help;type: counter;metricName: request_total;labelName: host;valuePrecision:2"
 func parseTag(tagRaw string) *promTag {
 	if cValue, ok := promTagCache[tagRaw]; ok {
 		return cValue
@@ -116,10 +112,12 @@ func parseTag(tagRaw string) *promTag {
 	return &pt
 }
 
-// Parse 解析 metricer 为 metric
-func Parse(metricer Metricer, externalLabels ...map[string]string) ([]*Sample, error) {
+// Parse 解析 s 为 metric
+// s 为一个struct
+// mnPrefix 指标名前缀 abc_
+func Parse(s any, mnPrefix string, externalLabels ...map[string]string) ([]*Sample, error) {
 
-	if metricer == nil {
+	if s == nil {
 		return make([]*Sample, 0), nil
 	}
 	var samples = make([]*Sample, 0, 32)
@@ -127,12 +125,12 @@ func Parse(metricer Metricer, externalLabels ...map[string]string) ([]*Sample, e
 	label := make(map[string]string, 8)
 	excludeLabel := make(map[string]string, 8)
 
-	reflectType := reflect.TypeOf(metricer)
-	reflectValue := reflect.ValueOf(metricer)
+	reflectType := reflect.TypeOf(s)
+	reflectValue := reflect.ValueOf(s)
 
-	// metricer 必须是一个 struct
+	// s 必须是一个 struct
 	if reflectValue.Kind() != reflect.Struct {
-		return nil, PromError{"metricer 必须是一个 struct!"}
+		return nil, PromError{"s 必须是一个 struct!"}
 	}
 
 	// 解析标签
@@ -154,11 +152,10 @@ func Parse(metricer Metricer, externalLabels ...map[string]string) ([]*Sample, e
 			// 添加指标名前后缀
 			metricName := strings.Join(
 				[]string{
-					metricer.GetMetricNamePrefix(),
+					mnPrefix,
 					pt.MetricName,
-					metricer.GetMetricNameSuffix(),
 				},
-				metricer.GetMetricNameSeparator(),
+				"",
 			)
 
 			// 设置指标值
